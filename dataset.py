@@ -137,13 +137,17 @@ if items_switch:
         if itemdate:
             d = datetime.strptime(itemdate, "%d-%b-%Y")
             itemdate = time.mktime(d.timetuple())   # itemdate: float num seconds after 1/1/70
+        else:
+            itemdate = 0.0
         # itemvrd =         # video release date:  ignore - use release date
         # URL               # ignore URL
         # unknown           # ignore unknown
-        Item_row = [itemid, itemdate]
+        print "itemdate is: ", itemdate
+        Item_row = [int(itemid), int(itemdate)]
         for j in range(6, 24):
-            Item_row.append(item_data[j])
+            Item_row.append(int(item_data[j]))
         #
+        print "shape of Item_row is: ", np.shape(Item_row)
         AllItemInfo.append(Item_row)
 
     ItemInfo = np.array(AllItemInfo)

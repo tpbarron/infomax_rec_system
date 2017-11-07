@@ -212,13 +212,13 @@ class BNN(nn.Module):
                  likelihood_sd=5.0,
                  nonlin=True):
         super(BNN, self).__init__()
+        print ("Ins/outs: ", n_inputs, n_outputs)
         if nonlin:
             self.bl1 = BayesianLayer(n_inputs, 32, nonlinearity=nonlinearity)
-            self.bl2 = BayesianLayer(32, 32, nonlinearity=nonlinearity)
-            self.bl3 = BayesianLayer(32, n_outputs, nonlinearity=None)
-            self.bls = nn.ModuleList([self.bl1, self.bl2, self.bl3])
+            # self.bl2 = BayesianLayer(32, 32, nonlinearity=nonlinearity)
+            self.bl3 = BayesianLayer(32, n_outputs, nonlinearity=F.sigmoid)
+            self.bls = nn.ModuleList([self.bl1, self.bl3])
         else:
-            print ("Ins/outs: ", n_inputs, n_outputs)
             self.bl = BayesianLayer(n_inputs, n_outputs, nonlinearity=None)
             self.bls = nn.ModuleList([self.bl])
 
@@ -270,6 +270,7 @@ class BNN(nn.Module):
         # MC samples.
         _log_p_D_given_w = []
         for _ in range(self.n_samples):
+            # print ("Loss sample..")
             # Make prediction.
             prediction = self.forward(inputs)
             # Calculate model likelihood log(P(D|w)).
@@ -290,6 +291,7 @@ class BNN(nn.Module):
         L = self.loss(Variable(torch.from_numpy(inputs).float()), Variable(torch.from_numpy(targets).float()))
         L.backward()
         self.opt.step()
+        return L.data.cpu()[0]
 
     def loss_last_sample(self, input, target):
         """The difference with the original loss is that we only update based on the latest sample.
@@ -382,6 +384,7 @@ class BNN(nn.Module):
     def forward(self, inputs):
         x = inputs
         for bl in self.bls:
+            # print (x)
             x = bl(x)
         # x = self.bl1(inputs)
         # x = self.bl2(x)

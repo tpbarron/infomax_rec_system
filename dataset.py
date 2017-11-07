@@ -17,7 +17,7 @@ import time
 data_shape = (943, 1682)
 data_dir = '../data/ml-100k/'
 #  turn off reading all ratings with switch
-ratings_switch = False
+ratings_switch = True
 if ratings_switch:
     # get data from datafile
     df = pandas.read_csv(data_dir + "ua.base", sep="\t", header=-1)
@@ -63,7 +63,7 @@ if ratings_switch:
 # User information
 #
 #  turn off reading all users with switch
-users_switch = False
+users_switch = True
 if users_switch:
     # get data from datafile
     data_shape = (943, 1)

@@ -207,7 +207,7 @@ class BNN(nn.Module):
                  n_inputs,
                  n_outputs,
                  nonlinearity=F.relu,
-                 lr=0.0001,
+                 lr=0.001,
                  n_samples=10,
                  likelihood_sd=5.0,
                  nonlin=True):
@@ -215,9 +215,9 @@ class BNN(nn.Module):
         print ("Ins/outs: ", n_inputs, n_outputs)
         if nonlin:
             self.bl1 = BayesianLayer(n_inputs, 32, nonlinearity=nonlinearity)
-            # self.bl2 = BayesianLayer(32, 32, nonlinearity=nonlinearity)
-            self.bl3 = BayesianLayer(32, n_outputs, nonlinearity=F.sigmoid)
-            self.bls = nn.ModuleList([self.bl1, self.bl3])
+            self.bl2 = BayesianLayer(32, 32, nonlinearity=nonlinearity)
+            self.bl3 = BayesianLayer(32, n_outputs, nonlinearity=F.softmax)
+            self.bls = nn.ModuleList([self.bl1, self.bl2, self.bl3])
         else:
             self.bl = BayesianLayer(n_inputs, n_outputs, nonlinearity=None)
             self.bls = nn.ModuleList([self.bl])

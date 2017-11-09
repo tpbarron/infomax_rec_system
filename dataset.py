@@ -22,21 +22,21 @@ if ratings_switch:
     # get data from datafile
     df = pandas.read_csv(data_dir + "ua.base", sep="\t", header=-1)
     values = df.values
-    # adjust indices to translate from 'index-starting-at-one' to 'index-starting-at-zero'
-    values[:, 0:2] -= 1
-    X_train = csr_matrix((values[:, 2], (values[:, 0], values[:, 1])), dtype=np.float, shape=data_shape)
-    print ("size of X_train: ", np.shape(X_train))
-    #
     # debug
-    # print "first row of X_train: ", X_train[0, :]
-    """
-    print "X_train[0, 0]: ", X_train[0, 0]
-    print "X_train[0, 26]: ", X_train[0, 26]
-    print "X_train[0, 27]: ", X_train[0, 27]
-    print "X_train[0, 280]: ", X_train[0, 280]
-    print "X_train[0, 1000]: ", X_train[0, 1000]
-    print "X_train[0, 2000]: ", X_train[0, 2000]
-    """
+    ratdim = np.shape(values)
+    print "shape of ratings values: ", np.shape(values)
+    print "first row of values: ", values[0, :]
+    AllRatings = np.zeros([943, 1682])
+    for i in range(ratdim[0]):
+        userid = int(values[i, 0]-1)     # userid: integer from 1 to 943
+        itemid = int(values[i, 1]-1)     # itemid: integer from 1 to 1682
+        AllRatings[userid, itemid] = int(values[i, 2])     # rating: integer from 1 to 5
+        #
+
+    X_train = np.array(AllRatings)
+    print ("shape of X_train: ", np.shape(X_train))
+    print ("first row of X_train: "), X_train[0, :]
+
     #  run through data and adjust ratings:
     #  Rating = 1 or 2:     change to -1
     #  Rating = 3:          change to 0
@@ -53,8 +53,8 @@ if ratings_switch:
                 Ratings[i, j] = 1
     #
     # debug
-    # print "size of Ratings: ", np.shape(Ratings)
-    # print "first row of Ratings: ", Ratings[:, 0]
+    print "size of Ratings: ", np.shape(Ratings)
+    print "first row of Ratings: ", Ratings[0, :]
     rating_file = 'ratings_file.npz'
     np.savez(rating_file, Ratings=Ratings)
     # print "Ratings file written"

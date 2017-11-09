@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 import bnn
 from sklearn.preprocessing import MinMaxScaler
+import simple_model
 
 # get the data from the datafile_ml100k
 datafile = 'datafile_ml100k.npz'
@@ -12,20 +13,26 @@ with np.load(datafile) as f:
     Ratings = f['Ratings']  # 943 users x 1682 movies
     Users = f['Users']      # 943 users x 5 fields
     Items = f['Items']      # 1682 movies x 20 fields
+# debug
+print("first row of Ratings: ", Ratings[0, :])
 
 #   set up the array of examples
 num_users = 943
 num_items = 1682
 example_array = np.zeros([num_users * num_items, 25])
 labels = np.zeros([num_users * num_items, 1])
+index = 0
 for i in range(num_users):
     for j in range(num_items):
         # first 1682 rows of batch correspond to first user;
         #  second 1682 rows of batch correspond to second user, etc.
-        example_array[i+j, 0:5] = Users[i, :]
-        example_array[i+j, 5:25] = Items[j, :]
-        labels[i+j, 0] = Ratings[i, j]
+        example_array[index, 0:5] = Users[i, :]
+        example_array[index, 5:25] = Items[j, :]
+        labels[index, 0] = Ratings[i, j]
+        index += 1
 
+# debug
+print("first row of labels: ", labels[0:1682, 0])
 # examples & targets
 examples = np.array(example_array)[0:1682,:]
 ground_truth = np.array(labels)[0:1682]
@@ -41,7 +48,9 @@ for i in range(len(ground_truth)):
     elif ground_truth[i] == 1:
         ground_truth_one_hot[i][2] = 1
 
-print ("Samples: ", examples.shape, ground_truth.shape)
+print ("Samples: ", examples.shape, ground_truth_one_hot.shape)
+print ("examples: ", examples)
+print ("labels: ", ground_truth_one_hot)
 
 scaler = MinMaxScaler()
 scaler.fit(examples)
@@ -51,19 +60,26 @@ print (examples.min(), examples.max())
 # shuffle the data
 # examples now holds array of all examples; ground_truth holds array of all labels
 # randomize the examples
-p = np.random.permutation(len(ground_truth_one_hot))
+p = np.random.permutation(len(ground_truth_one_hot[:, 0]))
 random_examples = examples[p]
 random_labels = ground_truth_one_hot[p]
 
-#  set up the Bayesian network model
-model = bnn.BNN(25, 3)
+#  set up the model
+#  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
+model_type = 'FC'
+if model_type == 'BNN':
+    model = bnn.BNN(25, 3)
+elif model_type == 'FC':
+    model = simple_model.FC(25, 3)
+
 # grab a batch of num_ex examples, so that inputs is 10 x 25 (10 examples, 25 features per example)
 # then train for each batch
 
 print (random_examples.shape)
 epochs = 500
 batch_size = 32
-num_batches = int(np.ceil(len(random_examples) / batch_size))
+# num_batches = int(np.ceil(len(random_examples) / batch_size))
+num_batches = int(np.floor(len(random_examples) / batch_size))
 
 def compute_error():
     error = 0.0

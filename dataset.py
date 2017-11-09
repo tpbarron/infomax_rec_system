@@ -25,10 +25,10 @@ if ratings_switch:
     # adjust indices to translate from 'index-starting-at-one' to 'index-starting-at-zero'
     values[:, 0:2] -= 1
     X_train = csr_matrix((values[:, 2], (values[:, 0], values[:, 1])), dtype=np.float, shape=data_shape)
-    print "size of X_train: ", np.shape(X_train)
+    print ("size of X_train: ", np.shape(X_train))
     #
     # debug
-    print "first row of X_train: ", X_train[0, :]
+    # print "first row of X_train: ", X_train[0, :]
     """
     print "X_train[0, 0]: ", X_train[0, 0]
     print "X_train[0, 26]: ", X_train[0, 26]
@@ -53,11 +53,11 @@ if ratings_switch:
                 Ratings[i, j] = 1
     #
     # debug
-    print "size of Ratings: ", np.shape(Ratings)
-    print "first row of Ratings: ", Ratings[:, 0]
+    # print "size of Ratings: ", np.shape(Ratings)
+    # print "first row of Ratings: ", Ratings[:, 0]
     rating_file = 'ratings_file.npz'
     np.savez(rating_file, Ratings=Ratings)
-    print "Ratings file written"
+    # print "Ratings file written"
 #
 #
 # User information
@@ -70,14 +70,14 @@ if users_switch:
     df = pandas.read_csv(data_dir + "u.user", sep="\t", header=-1)
     values = df.values
     # debug
-    print "shape of user values: ", np.shape(values)
-    print "first row of values: ", values[0, :]
+    # print "shape of user values: ", np.shape(values)
+    # print "first row of values: ", values[0, :]
     AllUserInfo = []
     occ_list = []
     for i in range(943):
-        print "i = ", i
+        # print "i = ", i
         row = values[i, 0]
-        print "row = ", row
+        # print "row = ", row
         user_data = row.split('|')
         userid = int(user_data[0])   # userid: integer from 1 to 943
         userage = int(user_data[1])/99.0     # userage: float from 0 to 1
@@ -95,15 +95,15 @@ if users_switch:
             userzip = int(user_data[4])
         except:
             userzip = 0
-            print "translated " + user_data[4] + " to 0"
+            # print "translated " + user_data[4] + " to 0"
         userzipcode = int(userzip)/99999.0      # userzip:  float from 0 to 1
         User_row = [userid, userage, usergender, userocc, userzipcode]
         AllUserInfo.append(User_row)
 
     UserInfo = np.array(AllUserInfo)
     # debug
-    print "shape of UserInfo: ", np.shape(UserInfo)
-    print "first row of UserInfo: ", UserInfo[0, :]
+    # print "shape of UserInfo: ", np.shape(UserInfo)
+    # print "first row of UserInfo: ", UserInfo[0, :]
     # save the User data in array
     users_file = 'users_file.npz'
     np.savez(users_file, UserInfo=UserInfo)
@@ -120,15 +120,15 @@ if items_switch:
     df = pandas.read_csv(data_dir + "u.item", sep="\t", header=-1)
     values = df.values
     # debug
-    print "shape of item values: ", np.shape(values)
-    print "first row of items: ", values[0, :]
+    # print "shape of item values: ", np.shape(values)
+    # print "first row of items: ", values[0, :]
     AllItemInfo = []
     title_list = []
     #
     for i in range(1682):
-        print "i = ", i
+        # print "i = ", i
         row = values[i, 0]
-        print "row = ", row
+        # print "row = ", row
         item_data = row.split('|')
         itemid = int(item_data[0])   # itemid: integer from 1 to 1682
         # title_list.append(user_data[1])   # title:  ignore - use itemid
@@ -142,18 +142,18 @@ if items_switch:
         # itemvrd =         # video release date:  ignore - use release date
         # URL               # ignore URL
         # unknown           # ignore unknown
-        print "itemdate is: ", itemdate
+        # print "itemdate is: ", itemdate
         Item_row = [int(itemid), int(itemdate)]
         for j in range(6, 24):
             Item_row.append(int(item_data[j]))
         #
-        print "shape of Item_row is: ", np.shape(Item_row)
+        # print "shape of Item_row is: ", np.shape(Item_row)
         AllItemInfo.append(Item_row)
 
     ItemInfo = np.array(AllItemInfo)
     # debug
-    print "shape of ItemInfo: ", np.shape(ItemInfo)
-    print "first row of ItemInfo: ", ItemInfo[0, :]
+    # print "shape of ItemInfo: ", np.shape(ItemInfo)
+    # print "first row of ItemInfo: ", ItemInfo[0, :]
     # save the Item data in array
     items_file = 'items_file.npz'
     np.savez(items_file, ItemInfo=ItemInfo)

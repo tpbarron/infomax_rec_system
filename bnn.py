@@ -208,10 +208,10 @@ class BNN(nn.Module):
                  n_outputs,
                  n_hidden=128,
                  nonlinearity=F.relu,
-                 lr=0.001,
+                 lr=0.0005,
                  n_samples=10,
                  likelihood_sd=0.1,
-                 nonlin=False):
+                 nonlin=True):
         super(BNN, self).__init__()
         print ("Ins/outs: ", n_inputs, n_outputs)
         if nonlin:

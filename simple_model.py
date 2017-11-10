@@ -15,11 +15,8 @@ class FC(torch.nn.Module):
         self.bl1 = torch.nn.Linear(n_inputs, num_dnodes)
         self.bl2 = torch.nn.ReLU()
         self.bl3 = torch.nn.Linear(num_dnodes, n_outputs)
-        # self.bl4 = torch.nn.ReLU()
-        # self.bl5 = torch.nn.Linear(num_dnodes, n_outputs)
-        self.bl6 = torch.nn.Sigmoid()
-        self.bls = torch.nn.ModuleList([self.bl1, self.bl2, self.bl3, self.bl6])
-# self.bl2, self.bl3, self.bl4, self.bl5
+        self.bl4 = torch.nn.Sigmoid()
+        self.bls = torch.nn.ModuleList([self.bl1, self.bl2, self.bl3, self.bl4])
         self.opt = torch.optim.Adam(self.parameters(), lr=lr)
 
     def loss(self, inputs, targets):

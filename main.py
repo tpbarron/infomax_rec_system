@@ -39,13 +39,21 @@ ground_truth = np.array(labels)[0:1682]
 nz = np.nonzero(ground_truth)[0]
 examples = examples[nz,:]
 ground_truth = ground_truth[nz]
-# two-way ratings
-ground_truth_one_hot = np.zeros((len(ground_truth), 2))
+
+ground_truth_one_hot = np.zeros((len(ground_truth), 1))
 for i in range(len(ground_truth)):
     if ground_truth[i] == 0.01:
-        ground_truth_one_hot[i][0] = 1      # [1 0] means rating was 1-3
+        ground_truth_one_hot[i] = 0      # [0] means rating was 1-3
     elif ground_truth[i] == 1:
-        ground_truth_one_hot[i][1] = 1      # [0 1] means rating was 4-5
+        ground_truth_one_hot[i] = 1      # [1] means rating was 4-5
+
+# two-way ratings
+# ground_truth_one_hot = np.zeros((len(ground_truth), 2))
+# for i in range(len(ground_truth)):
+#     if ground_truth[i] == 0.01:
+#         ground_truth_one_hot[i][0] = 1      # [1 0] means rating was 1-3
+#     elif ground_truth[i] == 1:
+#         ground_truth_one_hot[i][1] = 1      # [0 1] means rating was 4-5
 
 """
 # three-way ratings
@@ -60,8 +68,8 @@ for i in range(len(ground_truth)):
 """
 
 print ("Samples: ", examples.shape, ground_truth_one_hot.shape)
-print ("examples: ", examples)
-print ("labels: ", ground_truth_one_hot)
+# print ("examples: ", examples)
+# print ("labels: ", ground_truth_one_hot)
 
 scaler = MinMaxScaler()
 scaler.fit(examples)
@@ -73,22 +81,27 @@ print (examples.min(), examples.max())
 # randomize the examples
 p = np.random.permutation(len(ground_truth_one_hot[:, 0]))
 random_examples = examples[p]
+# random_examples2 = np.copy(random_examples)
+# random_examples = np.square(random_examples)
+# random_examples = np.concatenate((random_examples, random_examples2), axis=1)
+# print (random_examples.shape)
+# input("")
 random_labels = ground_truth_one_hot[p]
 
 #  set up the model
 #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
 model_type = 'FC'
 if model_type == 'BNN':
-    model = bnn.BNN(25, 2, lr=0.001)
+    model = bnn.BNN(25, 1, lr=0.001)
 elif model_type == 'FC':
-    model = simple_model.FC(25, 2)
+    model = simple_model.FC(25, 1)
 
 # grab a batch of num_ex examples, so that inputs is 10 x 25 (10 examples, 25 features per example)
 # then train for each batch
 
 print (random_examples.shape)
-epochs = 500
-batch_size = 32
+epochs = 10000
+batch_size = 128
 # num_batches = int(np.ceil(len(random_examples) / batch_size))
 num_batches = int(np.floor(len(random_examples) / batch_size))
 
@@ -99,15 +112,26 @@ def compute_error():
         true_out = random_labels[i, :]
         inputs = inputs.reshape((1, len(inputs)))
         inputs = Variable(torch.from_numpy(inputs), volatile=True).float()
-        output = model.forward(inputs)
+        output = model(inputs)
         error += ((true_out - output[0].data.numpy())**2.).sum() / len(true_out)
-    print ("Mean Error:", error / len(random_labels))
+    return error / len(random_labels)
+
+def compute_accuracy():
+    correct = 0.0
+    for i in range(len(random_labels)):
+        inputs = random_examples[i, :]
+        true_out = random_labels[i, :]
+        inputs = inputs.reshape((1, len(inputs)))
+        inputs = Variable(torch.from_numpy(inputs), volatile=True).float()
+        output = model(inputs)
+        if true_out == int(np.round(output[0].data.numpy())):
+            correct += 1.
+        # error += ((true_out - output[0].data.numpy())**2.).sum() / len(true_out)
+    return correct / len(random_labels)
 
 
 e = 0
-compute_error()
 while e < epochs:
-    print ("Epoch: ", e)
     b = 0
     while b < num_batches:
         # if b % 100 == 0:
@@ -120,20 +144,10 @@ while e < epochs:
         targets = random_labels[ind_start:ind_end,:]
         loss = model.train(inputs, targets)
         b += 1
-    compute_error()
+    if e % 10 == 0:
+        print ("Epoch: ", e, compute_error(), compute_accuracy())
     e += 1
 
 
 # save the Model
-torch.save(model.state_dict(), './model' + '-' + model_type + '.pth')
-#
-# call the forward method of the Bayesian network model to do a fwd inference pass
-#
-
-for i in range(len(random_labels)):
-    inputs = random_examples[i, :]
-    true_out = random_labels[i, :]
-    inputs = inputs.reshape((1, len(inputs)))
-    inputs = Variable(torch.from_numpy(inputs), volatile=True).float()
-    output = model.forward(inputs)
-    print ("Est/true:", output[0].data.numpy(), true_out)
+torch.save(model.state_dict(), 'models/model_' + model_type + '.pth')

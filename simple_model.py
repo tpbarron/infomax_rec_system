@@ -9,37 +9,29 @@ class FC(torch.nn.Module):
                  n_inputs,
                  n_outputs,
                  lr=0.0001,
-                 num_dnodes=1000,
-                 n_samples=10):
+                 num_dnodes=128):
         super(FC, self).__init__()
         print ("Ins/outs: ", n_inputs, n_outputs)
         self.bl1 = torch.nn.Linear(n_inputs, num_dnodes)
         self.bl2 = torch.nn.ReLU()
-        self.bl3 = torch.nn.Linear(num_dnodes, num_dnodes)
-        self.bl4 = torch.nn.ReLU()
-        self.bl5 = torch.nn.Linear(num_dnodes, n_outputs)
-        self.bls = torch.nn.ModuleList([self.bl1, self.bl2, self.bl3, self.bl4, self.bl5])
-
+        self.bl3 = torch.nn.Linear(num_dnodes, n_outputs)
+        # self.bl4 = torch.nn.ReLU()
+        # self.bl5 = torch.nn.Linear(num_dnodes, n_outputs)
+        self.bl6 = torch.nn.Sigmoid()
+        self.bls = torch.nn.ModuleList([self.bl1, self.bl2, self.bl3, self.bl6])
+# self.bl2, self.bl3, self.bl4, self.bl5
         self.opt = torch.optim.Adam(self.parameters(), lr=lr)
-        self.n_samples = n_samples
-
 
     def loss(self, inputs, targets):
         # use Mean Squared Error (MSE) as loss function
         loss_fn = torch.nn.MSELoss(size_average=False)
-        #
-        loss_runavg = 0
-        for _ in range(self.n_samples):
-            # print ("Loss sample..")
-            # Make prediction.
-            prediction = self.forward(inputs)
-            # Calculate loss for one example
-            loss = loss_fn(prediction, targets)
-            # calculate running avg loss
-            loss_runavg += loss/self.n_samples
-
+        prediction = self(inputs)
+        # print ("prediction: ", prediction)
+        # input("")
+        # Calculate loss for one example
+        loss = loss_fn(prediction, targets)
         # Return final running average for batch
-        return loss_runavg
+        return loss
 
     def train(self, inputs, targets, use_cuda=False):
         self.opt.zero_grad()

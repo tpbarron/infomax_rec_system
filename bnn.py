@@ -36,7 +36,7 @@ class BayesianLayer(nn.Module):
                  num_inputs,
                  num_outputs,
                  nonlinearity=F.relu,
-                 prior_sd=0.5,
+                 prior_sd=0.1,
                  **kwargs):
         super(BayesianLayer, self).__init__()
 
@@ -48,12 +48,12 @@ class BayesianLayer(nn.Module):
         prior_rho = float(self.std_to_log(self.prior_sd).numpy())
         # print ("prior_rho: ", prior_rho)
 
-        self.W = torch.Tensor(self.num_inputs, self.num_outputs).normal_(0., prior_sd)
+        self.W = torch.Tensor(self.num_inputs, self.num_outputs).normal_(0.0, self.prior_sd)
         self.b = torch.zeros(self.num_outputs)
 
         # set the priors
         self.mu = nn.Parameter(torch.FloatTensor(self.num_inputs, \
-            self.num_outputs).normal_(0., 1.))
+            self.num_outputs).normal_(0.0, 1.))
         self.rho = nn.Parameter(torch.FloatTensor(self.num_inputs, \
             self.num_outputs).fill_(prior_rho))
         # bias priors
@@ -206,20 +206,20 @@ class BNN(nn.Module):
     def __init__(self,
                  n_inputs,
                  n_outputs,
+                 n_hidden=128,
                  nonlinearity=F.relu,
                  lr=0.001,
                  n_samples=10,
-                 likelihood_sd=5.0,
-                 nonlin=True):
+                 likelihood_sd=0.1,
+                 nonlin=False):
         super(BNN, self).__init__()
         print ("Ins/outs: ", n_inputs, n_outputs)
         if nonlin:
-            self.bl1 = BayesianLayer(n_inputs, 32, nonlinearity=nonlinearity)
-            self.bl2 = BayesianLayer(32, 32, nonlinearity=nonlinearity)
-            self.bl3 = BayesianLayer(32, n_outputs, nonlinearity=F.softmax)
-            self.bls = nn.ModuleList([self.bl1, self.bl2, self.bl3])
+            self.bl1 = BayesianLayer(n_inputs, n_hidden, nonlinearity=nonlinearity)
+            self.bl3 = BayesianLayer(n_hidden, n_outputs, nonlinearity=F.sigmoid)
+            self.bls = nn.ModuleList([self.bl1, self.bl3])
         else:
-            self.bl = BayesianLayer(n_inputs, n_outputs, nonlinearity=None)
+            self.bl = BayesianLayer(n_inputs, n_outputs, nonlinearity=F.sigmoid)
             self.bls = nn.ModuleList([self.bl])
 
         self.opt = optim.Adam(self.parameters(), lr=lr)
@@ -272,7 +272,8 @@ class BNN(nn.Module):
         for _ in range(self.n_samples):
             # print ("Loss sample..")
             # Make prediction.
-            prediction = self.forward(inputs)
+            prediction = self(inputs)
+            # print ("prediction: ", prediction)
             # Calculate model likelihood log(P(D|w)).
             _log_p_D_given_w.append(self._log_prob_normal(targets, prediction, self.likelihood_sd))
 

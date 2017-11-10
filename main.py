@@ -39,14 +39,25 @@ ground_truth = np.array(labels)[0:1682]
 nz = np.nonzero(ground_truth)[0]
 examples = examples[nz,:]
 ground_truth = ground_truth[nz]
+# two-way ratings
+ground_truth_one_hot = np.zeros((len(ground_truth), 2))
+for i in range(len(ground_truth)):
+    if ground_truth[i] == 0.01:
+        ground_truth_one_hot[i][0] = 1      # [1 0] means rating was 1-3
+    elif ground_truth[i] == 1:
+        ground_truth_one_hot[i][1] = 1      # [0 1] means rating was 4-5
+
+"""
+# three-way ratings
 ground_truth_one_hot = np.zeros((len(ground_truth), 3))
 for i in range(len(ground_truth)):
-    if ground_truth[i] == -1:
+    if ground_truth[i] == :
         ground_truth_one_hot[i][0] = 1
     elif ground_truth[i] == 0.01:
         ground_truth_one_hot[i][1] = 1
     elif ground_truth[i] == 1:
         ground_truth_one_hot[i][2] = 1
+"""
 
 print ("Samples: ", examples.shape, ground_truth_one_hot.shape)
 print ("examples: ", examples)
@@ -68,9 +79,9 @@ random_labels = ground_truth_one_hot[p]
 #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
 model_type = 'FC'
 if model_type == 'BNN':
-    model = bnn.BNN(25, 3)
+    model = bnn.BNN(25, 2, lr=0.001)
 elif model_type == 'FC':
-    model = simple_model.FC(25, 3)
+    model = simple_model.FC(25, 2)
 
 # grab a batch of num_ex examples, so that inputs is 10 x 25 (10 examples, 25 features per example)
 # then train for each batch

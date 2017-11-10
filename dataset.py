@@ -45,12 +45,22 @@ if ratings_switch:
     for i in range(943):
         for j in range(1682):
             example = X_train[i, j];
+            #
+            """
+            # three-way ratings
             if example == 1.0 or example == 2.0:
                 Ratings[i, j] = -1
             elif example == 3.0:
                 Ratings[i, j] = 0.01    # 0.01 signifies rated, but neutral; 0 signifies no rating
             elif example == 4.0 or example == 5.0:
                 Ratings[i, j] = 1
+            """
+            # two-way ratings
+            if example == 1 or example == 2 or example == 3:
+                Ratings[i, j] = 0.01
+            elif example == 4 or example == 5:
+                Ratings[i, j] = 1
+            #
     #
     # debug
     print "size of Ratings: ", np.shape(Ratings)
@@ -63,7 +73,7 @@ if ratings_switch:
 # User information
 #
 #  turn off reading all users with switch
-users_switch = True
+users_switch = False
 if users_switch:
     # get data from datafile
     data_shape = (943, 1)
@@ -113,7 +123,7 @@ if users_switch:
 # Item/Movie information
 #
 #  turn off reading all items with switch
-items_switch = True
+items_switch = False
 if items_switch:
     # get data from datafile
     data_shape = (1682, 1)

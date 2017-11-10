@@ -124,6 +124,8 @@ while e < epochs:
     e += 1
 
 
+# save the Model
+torch.save(model.state_dict(), './model' + '-' + model_type + '.pth')
 #
 # call the forward method of the Bayesian network model to do a fwd inference pass
 #

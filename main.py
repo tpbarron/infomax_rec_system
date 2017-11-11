@@ -42,6 +42,14 @@ def load_data():
             labels[index, 0] = Ratings[i, j]
             index += 1
 
+    # normalize all data
+    scaler = MinMaxScaler()
+    scaler.fit(example_array)
+    example_array = scaler.transform(example_array)
+    print (example_array.min(), example_array.max())
+
+    movies = example_array[0:1682, 5:25]
+
     # debug
     print("first row of labels: ", labels[0:1682, 0])
     # examples & targets
@@ -75,12 +83,6 @@ def load_data():
     #     elif ground_truth[i] == 1:
     #         ground_truth_one_hot[i][2] = 1
 
-    print ("Samples: ", examples.shape, ground_truth_one_hot.shape)
-    scaler = MinMaxScaler()
-    scaler.fit(examples)
-    examples = scaler.transform(examples)
-    print (examples.min(), examples.max())
-
     # shuffle the data
     # examples now holds array of all examples; ground_truth holds array of all labels
     # randomize the examples
@@ -88,7 +90,7 @@ def load_data():
     random_examples = examples[p]
     #TODO: do non-linear feature transform here
     random_labels = ground_truth_one_hot[p]
-    return random_examples, random_labels, Items
+    return random_examples, random_labels, movies
 
 def build_model():
     #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
@@ -159,16 +161,18 @@ def compute_vpi(model, user_tag, movies):
         if i % 100 == 0:
             print ("Checking KL for movie ", i)
         m = movies[i]
+        # print (m.shape)
+        # input("")
         sample = np.concatenate((user_tag, m))[np.newaxis,:]
         for j in [0, 1]:
             target = np.array([[j]])
             # print (sample.shape, target.shape)
-            # kldiv = model.fast_kl_div(sample, target)
+            kldiv = model.fast_kl_div(sample, target)
 
-            model.save_old_params()
-            model.train(sample, target)
-            kldiv = model.info_gain().data[0]
-            model.reset_to_old_params()
+            # model.save_old_params()
+            # model.train(sample, target)
+            # kldiv = model.info_gain().data[0]
+            # model.reset_to_old_params()
 
             # print ("KL: ", kldiv)
             # input("")
@@ -177,8 +181,9 @@ def compute_vpi(model, user_tag, movies):
                 max_kl = kldiv
                 max_kl_movie = m
                 max_kl_target = target
+                print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
 
-    print ("Max KL: ", max_kl, max_kl_movie, max_kl_target)
+    print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
 
 if __name__ == '__main__':
     # pretrain model

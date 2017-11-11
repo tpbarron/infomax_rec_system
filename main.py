@@ -19,6 +19,9 @@ args = parser.parse_args()
 # get the data from the datafile_ml100k
 datafile = args.data_path
 
+N_USERS = 943
+N_MOVIES = 1682
+
 def load_data():
     with np.load(datafile) as f:
         Ratings = f['Ratings']  # 943 users x 1682 movies
@@ -30,13 +33,11 @@ def load_data():
     print("first Movie Title (should be Toy Story): ", MovieTitles[0])
 
     #   set up the array of examples
-    num_users = 943
-    num_items = 1682
-    example_array = np.zeros([num_users * num_items, 25])
-    labels = np.zeros([num_users * num_items, 1])
+    example_array = np.zeros([N_USERS * N_MOVIES, 25])
+    labels = np.zeros([N_USERS * N_MOVIES, 1])
     index = 0
-    for i in range(num_users):
-        for j in range(num_items):
+    for i in range(N_USERS):
+        for j in range(N_MOVIES):
             # first 1682 rows of batch correspond to first user;
             #  second 1682 rows of batch correspond to second user, etc.
             example_array[index, 0:5] = Users[i, :]
@@ -50,13 +51,13 @@ def load_data():
     example_array = scaler.transform(example_array)
     print (example_array.min(), example_array.max())
 
-    movies = example_array[0:1682, 5:25]
+    movies = example_array[0:N_MOVIES, 5:25]
 
     # debug
-    print("first row of labels: ", labels[0:1682, 0])
+    print("first row of labels: ", labels[0:N_MOVIES, 0])
     # examples & targets
-    examples = example_array[0:1682,:]
-    ground_truth = labels[0:1682]
+    examples = example_array[0:N_MOVIES,:]
+    ground_truth = labels[0:N_MOVIES]
     nz = np.nonzero(ground_truth)[0]
     examples = examples[nz,:]
     ground_truth = ground_truth[nz]
@@ -90,9 +91,9 @@ def load_data():
     # randomize the examples
     p = np.random.permutation(len(ground_truth_one_hot[:, 0]))
     random_examples = examples[p]
-    #TODO: do non-linear feature transform here
+    #TODO: do non-linear feature transform here?
     random_labels = ground_truth_one_hot[p]
-    return random_examples, random_labels, movies
+    return random_examples, random_labels, movies, MovieTitles
 
 def build_model():
     #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
@@ -126,11 +127,11 @@ def compute_accuracy(model, data, labels):
         # error += ((true_out - output[0].data.numpy())**2.).sum() / len(true_out)
     return correct / len(labels)
 
-def train(model, data, labels):
+def train(model, data, labels, epochs, retrain=0):
     num_batches = int(np.floor(len(labels) / args.batch_size))
 
     e = 0
-    while e < args.epochs:
+    while e < epochs:
         b = 0
         while b < num_batches:
             # if b % 100 == 0:
@@ -144,9 +145,9 @@ def train(model, data, labels):
             loss = model.train(inputs, targets)
             b += 1
         if e % 10 == 0:
-            print ("Epoch: ", e, compute_error(model, data, labels), compute_accuracy(model, data, labels))
+            print ("Epoch: ", e, ", retrain: ", retrain, compute_error(model, data, labels), compute_accuracy(model, data, labels))
             # save the Model
-            torch.save(model, 'models/model_' + args.model_type + '_epoch_'+str(e)+'.pth')
+            torch.save(model, 'models/model_' + args.model_type + '_epoch_'+str(e)+'_retrain_'+str(retrain)+'.pth')
 
         e += 1
 
@@ -159,16 +160,17 @@ def compute_vpi(model, user_tag, movies):
     max_kl = -np.inf
     max_kl_movie = None
     max_kl_target = None
-    for i in range(len(movies)):
+    for i in range(N_MOVIES):
         if i % 100 == 0:
             print ("Checking KL for movie ", i)
         m = movies[i]
         # print (m.shape)
         # input("")
         sample = np.concatenate((user_tag, m))[np.newaxis,:]
-        for j in [0, 1]:
+        for j in [0]: #, 1]:
+            # Looking for max KL if user doesn't like.
+            # This means that we think the user should like it a lot!
             target = np.array([[j]])
-            # print (sample.shape, target.shape)
             kldiv = model.fast_kl_div(sample, target)
 
             # model.save_old_params()
@@ -179,23 +181,60 @@ def compute_vpi(model, user_tag, movies):
             # print ("KL: ", kldiv)
             # input("")
 
-            if kldiv > max_kl:
+            if kldiv >= max_kl:
                 max_kl = kldiv
                 max_kl_movie = m
                 max_kl_target = target
                 print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
 
     print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
+    return max_kl, max_kl_movie, max_kl_target
+
+def get_movie_name(titles, id):
+    return str(titles[id])
+
+def print_user_prefs(data, labels, titles):
+    """
+    Given a subset of data for a specific user, print the movies the user likes and doesn't like"""
+    for i in range(len(data)):
+        if labels[i] == 0:
+            print ("User does not like: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
+    for i in range(len(data)):
+        if labels[i] == 1:
+            print ("User likes: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
 
 if __name__ == '__main__':
+    data, labels, movies, titles = load_data()
+    print_user_prefs(data, labels, titles)
     # pretrain model
-    data, labels, movies = load_data()
     if args.load_model != '':
         model = torch.load(args.load_model)
     else:
         # create model given type
         model = build_model()
         # train
-        train(model, data, labels)
+        train(model, data, labels, args.epochs)
 
-    compute_vpi(model, data[0][0:5], movies)
+    itrs = 1
+    while True:
+        # alternate, recommendation, retraining
+        kl, movie, target = compute_vpi(model, data[0][0:5], movies)
+        resp = input("Do you like the movie " + get_movie_name(titles, int(movie[0]*N_MOVIES)) + "? Y/N. ")
+        # concat new movie to dataset
+        if resp == 'Y' or resp == 'y':
+            new_label = np.array([[1.]])
+        else:
+            new_label = np.array([[0.]])
+        # concat user portion with movie portion
+        new_sample = np.concatenate((data[0][0:5], movie))[np.newaxis,:]
+        # print (new_sample.shape)
+        # print (new_label.shape)
+        # print (data.shape)
+        # print (labels.shape)
+        data = np.concatenate((data, new_sample))
+        labels = np.concatenate((labels, new_label))
+        # print (data.shape)
+        # print (labels.shape)
+        # input("Next?")
+        train(model, data, labels, epochs=100, retrain=itrs)
+        itrs += 1

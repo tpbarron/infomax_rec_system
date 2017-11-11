@@ -73,7 +73,7 @@ if ratings_switch:
 # User information
 #
 #  turn off reading all users with switch
-users_switch = False
+users_switch = True
 if users_switch:
     # get data from datafile
     data_shape = (943, 1)

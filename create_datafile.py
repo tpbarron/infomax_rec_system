@@ -9,7 +9,8 @@ with np.load('users_file.npz') as b:
 #
 with np.load('items_file.npz') as c:
     Items = c['ItemInfo']
+    MovieTitles = c['MovieTitles']
 #
 # save into new file
-np.savez('datafile_ml100k.npz', Ratings=Ratings, Users=Users, Items=Items)
+np.savez('datafile_ml100k.npz', Ratings=Ratings, Users=Users, Items=Items, MovieTitles=MovieTitles)
 #

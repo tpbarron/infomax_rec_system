@@ -24,8 +24,10 @@ def load_data():
         Ratings = f['Ratings']  # 943 users x 1682 movies
         Users = f['Users']      # 943 users x 5 fields
         Items = f['Items']      # 1682 movies x 20 fields
+        MovieTitles = f['MovieTitles']
     # debug
     print("first row of Ratings: ", Ratings[0, :])
+    print("first Movie Title (should be Toy Story): ", MovieTitles[0])
 
     #   set up the array of examples
     num_users = 943

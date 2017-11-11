@@ -123,7 +123,7 @@ if users_switch:
 # Item/Movie information
 #
 #  turn off reading all items with switch
-items_switch = False
+items_switch = True
 if items_switch:
     # get data from datafile
     data_shape = (1682, 1)
@@ -141,7 +141,7 @@ if items_switch:
         # print "row = ", row
         item_data = row.split('|')
         itemid = int(item_data[0])   # itemid: integer from 1 to 1682
-        # title_list.append(user_data[1])   # title:  ignore - use itemid
+        title_list.append(item_data[1])   # title:  ignore - use itemid
         itemdate = item_data[2]
         # for some movies, no itemdate is provided, so make sure it is there before converting
         if itemdate:
@@ -161,10 +161,11 @@ if items_switch:
         AllItemInfo.append(Item_row)
 
     ItemInfo = np.array(AllItemInfo)
+    MovieTitles = title_list
     # debug
     # print "shape of ItemInfo: ", np.shape(ItemInfo)
     # print "first row of ItemInfo: ", ItemInfo[0, :]
     # save the Item data in array
     items_file = 'items_file.npz'
-    np.savez(items_file, ItemInfo=ItemInfo)
+    np.savez(items_file, ItemInfo=ItemInfo, MovieTitles=MovieTitles)
 #

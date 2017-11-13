@@ -31,11 +31,23 @@ def load_data():
     # debug
     print("first row of Ratings: ", Ratings[0, :])
     print("first Movie Title (should be Toy Story): ", MovieTitles[0])
-
+    # debug info - get titles of all movies
+    """
+    for j in range(N_MOVIES):
+        print("Index=%d Movie Title=%s" % (j, MovieTitles[j]))
+    #
+    exit()
+    """
     #   set up the array of examples
     example_array = np.zeros([N_USERS * N_MOVIES, 25])
     labels = np.zeros([N_USERS * N_MOVIES, 1])
+    labs_fake = np.zeros([N_USERS * N_MOVIES, 1])
     index = 0
+    use_fake_user = 1
+    fake_user_did_like = [49, 88, 95, 120, 134, 171, 175, 180, 182, 221, \
+        1, 28, 78, 116, 117, 143, 160, 173, 209, 225]
+    fake_user_did_not_like = [370, 377, 388, 401, 415, 420, 426, 457, 482, 483, \
+        40, 66, 71, 89, 138, 150, 152, 157, 162, 167]
     for i in range(N_USERS):
         for j in range(N_MOVIES):
             # first 1682 rows of batch correspond to first user;
@@ -43,8 +55,19 @@ def load_data():
             example_array[index, 0:5] = Users[i, :]
             example_array[index, 5:25] = Items[j, :]
             labels[index, 0] = Ratings[i, j]
+            # fake user; selected movies have 0.01 for didn't like; 1 for did like
+            # labs_fake[index, 0] = 0
+            if index in fake_user_did_like:
+                labs_fake[index, 0] = 1.0
+            elif index in fake_user_did_not_like:
+                labs_fake[index, 0] = 0.01
+            # end fake user
             index += 1
 
+    # fake user switch on/off
+    if use_fake_user == 1:
+        labels = labs_fake
+    #
     # normalize all data
     scaler = MinMaxScaler()
     scaler.fit(example_array)

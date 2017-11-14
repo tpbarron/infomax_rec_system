@@ -208,9 +208,10 @@ class BNN(nn.Module):
                  n_outputs,
                  n_hidden=128,
                  nonlinearity=F.relu,
-                 lr=0.0005,
+                 lr=0.0001,
                  n_samples=10,
                  likelihood_sd=0.1,
+                 n_batches=5.0,
                  nonlin=True):
         super(BNN, self).__init__()
         print ("Ins/outs: ", n_inputs, n_outputs)
@@ -225,7 +226,7 @@ class BNN(nn.Module):
         self.opt = optim.Adam(self.parameters(), lr=lr)
         self.n_samples = n_samples
         self.likelihood_sd = likelihood_sd
-        self.n_batches = 5. # same as original
+        self.n_batches = 5. #n_batches # same as original
 
     def save_old_params(self):
         for m in self.modules():

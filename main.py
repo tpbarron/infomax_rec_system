@@ -1,6 +1,9 @@
 import argparse
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics.pairwise import polynomial_kernel
+import pickle
+import os
 
 import torch
 from torch.autograd import Variable
@@ -14,13 +17,47 @@ parser.add_argument('--model-type', type=str, default='BNN', help='model type, F
 parser.add_argument('--batch-size', type=int, default=128, help='training batch size')
 parser.add_argument('--epochs', type=int, default=10000, help='training epochs')
 parser.add_argument('--load-model', type=str, default='', help='which model to load')
+parser.add_argument('--user', type=int, default=1, help='Which user to train on')
+parser.add_argument('--use-kernel', action='store_true')
+parser.add_argument('--use-non-lin', action='store_true')
+parser.add_argument('--tag', type=str, help='exp tag')
 args = parser.parse_args()
+
+log_dir = os.path.join('models/', args.tag)
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+with open (os.path.join(log_dir, 'args_snapshot.pkl'), 'wb') as f:
+    pickle.dump(args, f)
 
 # get the data from the datafile_ml100k
 datafile = args.data_path
 
 N_USERS = 943
 N_MOVIES = 1682
+
+def kernel_transform(data):
+    new_data = np.copy(data)
+
+    # append squares
+    data_sqrs = np.copy(data)
+    data_sqrs = data_sqrs ** 2.
+    new_data = np.concatenate((new_data, data_sqrs), axis=1)
+    # print (new_data.shape)
+    # pairs
+    # 12, 13, ... 1n
+    # num = sum(1 to n-1) = (n-1 * n-2) / 2 = 19*20 / 2 = 190
+    for i in range(1, data.shape[1]-1):
+        for j in range(i+1, data.shape[1]):
+            # vec of col i * col j
+            coli = data[:,i]
+            colj = data[:,j]
+            pair = coli * colj
+            pair = pair.reshape(-1, 1)
+            # print ("Pair: ", pair.shape)
+            new_data = np.concatenate((new_data, pair), axis=1)
+
+    # print ("new data: ", new_data.shape)
+    return new_data
 
 def load_data():
     with np.load(datafile) as f:
@@ -33,15 +70,17 @@ def load_data():
     print("first Movie Title (should be Toy Story): ", MovieTitles[0])
 
     #   set up the array of examples
-    example_array = np.zeros([N_USERS * N_MOVIES, 25])
+    # example_array = np.zeros([N_USERS * N_MOVIES, 25])
+    example_array = np.zeros([N_USERS * N_MOVIES, 20])
     labels = np.zeros([N_USERS * N_MOVIES, 1])
     index = 0
     for i in range(N_USERS):
         for j in range(N_MOVIES):
             # first 1682 rows of batch correspond to first user;
             #  second 1682 rows of batch correspond to second user, etc.
-            example_array[index, 0:5] = Users[i, :]
-            example_array[index, 5:25] = Items[j, :]
+            # example_array[index, 0:5] = Users[i, :]
+            # example_array[index, 5:25] = Items[j, :]
+            example_array[index,:] = Items[j, :]
             labels[index, 0] = Ratings[i, j]
             index += 1
 
@@ -51,13 +90,13 @@ def load_data():
     example_array = scaler.transform(example_array)
     print (example_array.min(), example_array.max())
 
-    movies = example_array[0:N_MOVIES, 5:25]
+    movies = example_array[0:N_MOVIES,:]# 5:25]
 
     # debug
     print("first row of labels: ", labels[0:N_MOVIES, 0])
     # examples & targets
-    examples = example_array[0:N_MOVIES,:]
-    ground_truth = labels[0:N_MOVIES]
+    examples = example_array[args.user*N_MOVIES:(args.user+1)*N_MOVIES,:]
+    ground_truth = labels[args.user*N_MOVIES:(args.user+1)*N_MOVIES]
     nz = np.nonzero(ground_truth)[0]
     examples = examples[nz,:]
     ground_truth = ground_truth[nz]
@@ -91,16 +130,19 @@ def load_data():
     # randomize the examples
     p = np.random.permutation(len(ground_truth_one_hot[:, 0]))
     random_examples = examples[p]
-    #TODO: do non-linear feature transform here?
+
+    # do non-linear feature transform here?
+    if args.use_kernel:
+        random_examples = kernel_transform(random_examples)
     random_labels = ground_truth_one_hot[p]
     return random_examples, random_labels, movies, MovieTitles
 
-def build_model():
+def build_model(input_dim=20, output_dim=1, n_batches=5):
     #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
     if args.model_type == 'BNN':
-        model = bnn.BNN(25, 1, lr=0.001)
+        model = bnn.BNN(input_dim, output_dim, lr=0.005, n_batches=n_batches, nonlin=args.use_non_lin)
     elif args.model_type == 'FC':
-        model = simple_model.FC(25, 1)
+        model = simple_model.FC(input_dim, output_dim, nonlin=args.use_non_lin)
     return model
 
 def compute_error(model, data, labels):
@@ -122,9 +164,10 @@ def compute_accuracy(model, data, labels):
         inputs = inputs.reshape((1, len(inputs)))
         inputs = Variable(torch.from_numpy(inputs), volatile=True).float()
         output = model(inputs)
-        if true_out == int(np.round(output[0].data.numpy())):
+        if true_out == 1 and output[0].data.numpy() >= 0.5:
+            correct += 1
+        elif true_out == 0 and output[0].data.numpy() < 0.5:
             correct += 1.
-        # error += ((true_out - output[0].data.numpy())**2.).sum() / len(true_out)
     return correct / len(labels)
 
 def train(model, data, labels, epochs, retrain=0):
@@ -144,10 +187,10 @@ def train(model, data, labels, epochs, retrain=0):
             targets = labels[ind_start:ind_end,:]
             loss = model.train(inputs, targets)
             b += 1
-        if e % 10 == 0:
+        if e % 100 == 0:
             print ("Epoch: ", e, ", retrain: ", retrain, compute_error(model, data, labels), compute_accuracy(model, data, labels))
             # save the Model
-            torch.save(model, 'models/model_' + args.model_type + '_epoch_'+str(e)+'_retrain_'+str(retrain)+'.pth')
+            torch.save(model, log_dir+'/model_' + args.model_type + '_epoch_'+str(e)+'_retrain_'+str(retrain)+'.pth')
 
         e += 1
 
@@ -166,7 +209,10 @@ def compute_vpi(model, user_tag, movies):
         m = movies[i]
         # print (m.shape)
         # input("")
-        sample = np.concatenate((user_tag, m))[np.newaxis,:]
+        sample = m[np.newaxis,:]
+        if args.use_kernel:
+            sample = kernel_transform(sample)
+        # sample = np.concatenate((user_tag, m))[np.newaxis,:]
         for j in [0]: #, 1]:
             # Looking for max KL if user doesn't like.
             # This means that we think the user should like it a lot!
@@ -195,44 +241,73 @@ def get_movie_name(titles, id):
 
 def print_user_prefs(data, labels, titles):
     """
-    Given a subset of data for a specific user, print the movies the user likes and doesn't like"""
+    Given a subset of data for a specific user, print the movies the user likes and doesn't like
+    """
     for i in range(len(data)):
         if labels[i] == 0:
-            print ("User does not like: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
+            # print ("User does not like: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
+            print ("User does not like: ", get_movie_name(titles, int(data[i][0]*N_MOVIES)))
     for i in range(len(data)):
         if labels[i] == 1:
-            print ("User likes: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
+            # print ("User likes: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
+            print ("User likes: ", get_movie_name(titles, int(data[i][0]*N_MOVIES)))
+
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+
+def plot_tsne(data, labels, movies):
+    for i in [30]:
+        print ("perplexity: ", i)
+        X_embedded = TSNE(perplexity=25, n_components=2).fit_transform(data)
+        colors = ['blue' if l == 1 else 'red' for l in np.nditer(labels)]
+        plt.scatter(X_embedded[:,0], X_embedded[:,1], c=colors)
+        plt.show()
+        # input("Done")
+        plt.close()
 
 if __name__ == '__main__':
     data, labels, movies, titles = load_data()
+    # plot_tsne(data, labels, movies)
     print_user_prefs(data, labels, titles)
     # pretrain model
     if args.load_model != '':
         model = torch.load(args.load_model)
     else:
         # create model given type
-        model = build_model()
+        model = build_model(input_dim=data.shape[1], n_batches=int(np.floor(len(labels) / args.batch_size)))
         # train
         train(model, data, labels, args.epochs)
 
     itrs = 1
     while True:
         # alternate, recommendation, retraining
-        kl, movie, target = compute_vpi(model, data[0][0:5], movies)
-        resp = input("Do you like the movie " + get_movie_name(titles, int(movie[0]*N_MOVIES)) + "? Y/N. ")
+        # kl, movie, target = compute_vpi(model, data[0][0:5], movies)
+        kl, movie, target = compute_vpi(model, None, movies)
+        movie_id = int(movie[0]*N_MOVIES)
+        resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
         # concat new movie to dataset
         if resp == 'Y' or resp == 'y':
             new_label = np.array([[1.]])
         else:
             new_label = np.array([[0.]])
+
+        # TODO: check whether sample is in data first, change label if needed
         # concat user portion with movie portion
-        new_sample = np.concatenate((data[0][0:5], movie))[np.newaxis,:]
+        # new_sample = np.concatenate((data[0][0:5], movie))[np.newaxis,:]
+        new_sample = movie[np.newaxis,:]
+        data_index = np.argwhere(data[:, 0] == movie[0])
+        print ("Existing data_index:", data_index)
+        if len(data_index) > 0:
+            labels[data_index[0][0]] = new_label
+        else:
+            if args.use_kernel:
+                new_sample = kernel_transform(new_sample)
+            data = np.concatenate((data, new_sample))
+            labels = np.concatenate((labels, new_label))
         # print (new_sample.shape)
         # print (new_label.shape)
         # print (data.shape)
         # print (labels.shape)
-        data = np.concatenate((data, new_sample))
-        labels = np.concatenate((labels, new_label))
         # print (data.shape)
         # print (labels.shape)
         # input("Next?")

@@ -9,14 +9,21 @@ class FC(torch.nn.Module):
                  n_inputs,
                  n_outputs,
                  lr=0.0001,
-                 num_dnodes=128):
+                 num_dnodes=128,
+                 nonlin=True):
         super(FC, self).__init__()
         print ("Ins/outs: ", n_inputs, n_outputs)
-        self.bl1 = torch.nn.Linear(n_inputs, num_dnodes)
-        self.bl2 = torch.nn.ReLU()
-        self.bl3 = torch.nn.Linear(num_dnodes, n_outputs)
-        self.bl4 = torch.nn.Sigmoid()
-        self.bls = torch.nn.ModuleList([self.bl1, self.bl2, self.bl3, self.bl4])
+
+        if nonlin:
+            self.bl1 = torch.nn.Linear(n_inputs, num_dnodes)
+            self.bl2 = torch.nn.ReLU()
+            self.bl3 = torch.nn.Linear(num_dnodes, n_outputs)
+            self.bl4 = torch.nn.Sigmoid()
+            self.bls = torch.nn.ModuleList([self.bl1, self.bl2, self.bl3, self.bl4])
+        else:
+            self.bl1 = torch.nn.Linear(n_inputs, n_outputs)
+            self.bl2 = torch.nn.Sigmoid()
+            self.bls = torch.nn.ModuleList([self.bl1, self.bl2])
         self.opt = torch.optim.Adam(self.parameters(), lr=lr)
 
     def loss(self, inputs, targets):

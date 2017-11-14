@@ -16,10 +16,12 @@ parser.add_argument('--data-path', type=str, default='datafile_ml100k.npz', help
 parser.add_argument('--model-type', type=str, default='BNN', help='model type, FC or BNN')
 parser.add_argument('--batch-size', type=int, default=128, help='training batch size')
 parser.add_argument('--epochs', type=int, default=10000, help='training epochs')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--load-model', type=str, default='', help='which model to load')
 parser.add_argument('--user', type=int, default=1, help='Which user to train on')
 parser.add_argument('--use-kernel', action='store_true')
 parser.add_argument('--use-non-lin', action='store_true')
+parser.add_argument('--use-fake-user', action='store_true')
 parser.add_argument('--tag', type=str, help='exp tag')
 args = parser.parse_args()
 
@@ -34,6 +36,9 @@ datafile = args.data_path
 
 N_USERS = 943
 N_MOVIES = 1682
+
+if args.use_fake_user:
+    args.user = N_USERS
 
 def kernel_transform(data):
     new_data = np.copy(data)
@@ -77,42 +82,43 @@ def load_data():
     """
     #   set up the array of examples
     # example_array = np.zeros([N_USERS * N_MOVIES, 25])
-    example_array = np.zeros([N_USERS * N_MOVIES, 20])
-    labels = np.zeros([N_USERS * N_MOVIES, 1])
-    labs_fake = np.zeros([N_USERS * N_MOVIES, 1])
-    index = 0
-    use_fake_user = 1
     fake_user_did_like = [49, 88, 95, 120, 134, 171, 175, 180, 182, 221, \
         1, 28, 78, 116, 117, 143, 160, 173, 209, 225]
     fake_user_did_not_like = [370, 377, 388, 401, 415, 420, 426, 457, 482, 483, \
         40, 66, 71, 89, 138, 150, 152, 157, 162, 167]
-    for i in range(N_USERS):
+
+    # add one for fake user
+    example_array = np.zeros([(N_USERS+1) * N_MOVIES, 20])
+    labels = np.zeros([(N_USERS+1) * N_MOVIES, 1])
+    index = 0
+    for i in range(N_USERS+1):
         for j in range(N_MOVIES):
             # first 1682 rows of batch correspond to first user;
             #  second 1682 rows of batch correspond to second user, etc.
             # example_array[index, 0:5] = Users[i, :]
             # example_array[index, 5:25] = Items[j, :]
+
             example_array[index,:] = Items[j, :]
-            labels[index, 0] = Ratings[i, j]
-            # fake user; selected movies have 0.01 for didn't like; 1 for did like
-            # labs_fake[index, 0] = 0
-            if index in fake_user_did_like:
-                labs_fake[index, 0] = 1.0
-            elif index in fake_user_did_not_like:
-                labs_fake[index, 0] = 0.01
-            # end fake user
+            if i == N_USERS: # make fake user
+                if j in fake_user_did_like:
+                    # print ("TEST like")
+                    labels[index, 0] = 1.0
+                elif j in fake_user_did_not_like:
+                    # print ("TEST not like")
+                    labels[index, 0] = 0.01
+            else:
+                labels[index, 0] = Ratings[i, j]
+
             index += 1
 
-    # fake user switch on/off
-    if use_fake_user == 1:
-        labels = labs_fake
-    #
-    # normalize all data
+
+    # normalize all data, doing this before selecting nonzero ensures consistent normalization
     scaler = MinMaxScaler()
     scaler.fit(example_array)
     example_array = scaler.transform(example_array)
     print (example_array.min(), example_array.max())
 
+    # normalized movies
     movies = example_array[0:N_MOVIES,:]# 5:25]
 
     # debug
@@ -127,26 +133,11 @@ def load_data():
     ground_truth_one_hot = np.zeros((len(ground_truth), 1))
     for i in range(len(ground_truth)):
         if ground_truth[i] == 0.01:
+            print ("Negative")
             ground_truth_one_hot[i] = 0      # [0] means rating was 1-3
         elif ground_truth[i] == 1:
+            print ("Positive")
             ground_truth_one_hot[i] = 1      # [1] means rating was 4-5
-
-    # two-way ratings
-    # ground_truth_one_hot = np.zeros((len(ground_truth), 2))
-    # for i in range(len(ground_truth)):
-    #     if ground_truth[i] == 0.01:
-    #         ground_truth_one_hot[i][0] = 1      # [1 0] means rating was 1-3
-    #     elif ground_truth[i] == 1:
-    #         ground_truth_one_hot[i][1] = 1      # [0 1] means rating was 4-5
-    # three-way ratings
-    # ground_truth_one_hot = np.zeros((len(ground_truth), 3))
-    # for i in range(len(ground_truth)):
-    #     if ground_truth[i] == :
-    #         ground_truth_one_hot[i][0] = 1
-    #     elif ground_truth[i] == 0.01:
-    #         ground_truth_one_hot[i][1] = 1
-    #     elif ground_truth[i] == 1:
-    #         ground_truth_one_hot[i][2] = 1
 
     # shuffle the data
     # examples now holds array of all examples; ground_truth holds array of all labels
@@ -158,14 +149,17 @@ def load_data():
     if args.use_kernel:
         random_examples = kernel_transform(random_examples)
     random_labels = ground_truth_one_hot[p]
+    print ("Data / targets: ", random_examples.shape, random_labels.shape)
+    # input("")
     return random_examples, random_labels, movies, MovieTitles
 
 def build_model(input_dim=20, output_dim=1, n_batches=5):
     #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
     if args.model_type == 'BNN':
-        model = bnn.BNN(input_dim, output_dim, lr=0.005, n_batches=n_batches, nonlin=args.use_non_lin)
+        # 0.005
+        model = bnn.BNN(input_dim, output_dim, lr=args.lr, n_batches=n_batches, nonlin=args.use_non_lin)
     elif args.model_type == 'FC':
-        model = simple_model.FC(input_dim, output_dim, nonlin=args.use_non_lin)
+        model = simple_model.FC(input_dim, output_dim, lr=args.lr, nonlin=args.use_non_lin)
     return model
 
 def compute_error(model, data, labels):
@@ -194,7 +188,7 @@ def compute_accuracy(model, data, labels):
     return correct / len(labels)
 
 def train(model, data, labels, epochs, retrain=0):
-    num_batches = int(np.floor(len(labels) / args.batch_size))
+    num_batches = int(np.ceil(len(labels) / args.batch_size))
 
     e = 0
     while e < epochs:
@@ -269,11 +263,11 @@ def print_user_prefs(data, labels, titles):
     for i in range(len(data)):
         if labels[i] == 0:
             # print ("User does not like: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
-            print ("User does not like: ", get_movie_name(titles, int(data[i][0]*N_MOVIES)))
+            print ("User does not like: ", list(data[i]), get_movie_name(titles, int(data[i][0]*N_MOVIES)))
     for i in range(len(data)):
         if labels[i] == 1:
             # print ("User likes: ", get_movie_name(titles, int(data[i][5]*N_MOVIES)))
-            print ("User likes: ", get_movie_name(titles, int(data[i][0]*N_MOVIES)))
+            print ("User likes: ", list(data[i]), get_movie_name(titles, int(data[i][0]*N_MOVIES)))
 
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
@@ -292,6 +286,7 @@ if __name__ == '__main__':
     data, labels, movies, titles = load_data()
     # plot_tsne(data, labels, movies)
     print_user_prefs(data, labels, titles)
+    # input("")
     # pretrain model
     if args.load_model != '':
         model = torch.load(args.load_model)

@@ -17,11 +17,13 @@ parser.add_argument('--model-type', type=str, default='BNN', help='model type, F
 parser.add_argument('--batch-size', type=int, default=128, help='training batch size')
 parser.add_argument('--epochs', type=int, default=10000, help='training epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--eta', type=float, default=0.1, help='expl param')
 parser.add_argument('--load-model', type=str, default='', help='which model to load')
 parser.add_argument('--user', type=int, default=1, help='Which user to train on')
 parser.add_argument('--use-kernel', action='store_true')
 parser.add_argument('--use-non-lin', action='store_true')
 parser.add_argument('--use-fake-user', action='store_true')
+parser.add_argument('--vpi', action='store_true')
 parser.add_argument('--tag', type=str, help='exp tag')
 args = parser.parse_args()
 
@@ -216,6 +218,8 @@ def train(model, data, labels, epochs, retrain=0):
 def compute_vpi(model, user_tag, movies):
     """
     Compute value of perfect information for each movie...
+
+    TODO: don't permit recommending movie that user already rated?
     """
     max_kl = -np.inf
     max_kl_movie = None
@@ -229,20 +233,27 @@ def compute_vpi(model, user_tag, movies):
         sample = m[np.newaxis,:]
         if args.use_kernel:
             sample = kernel_transform(sample)
-        # sample = np.concatenate((user_tag, m))[np.newaxis,:]
-        for j in [0]: #, 1]:
-            # Looking for max KL if user doesn't like.
-            # This means that we think the user should like it a lot!
+
+        if args.vpi:
+            # sample = np.concatenate((user_tag, m))[np.newaxis,:]
+            for j in [0]: #, 1]:
+                # Looking for max KL if user doesn't like.
+                # This means that we think the user should like it a lot!
+                target = np.array([[j]])
+                kldiv = model.fast_kl_div(sample, target)
+
+                if kldiv >= max_kl:
+                    max_kl = kldiv
+                    max_kl_movie = m
+                    max_kl_target = target
+                    print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
+        else:
+            # try something diff, use explicit trade off
             target = np.array([[j]])
+            prediction = model(Variable(torch.from_numpy(sample), volatile=True).float()).data[0,0]
             kldiv = model.fast_kl_div(sample, target)
-
-            # model.save_old_params()
-            # model.train(sample, target)
-            # kldiv = model.info_gain().data[0]
-            # model.reset_to_old_params()
-
-            # print ("KL: ", kldiv)
-            # input("")
+            # print ("pred: ", prediction, ", kldiv: ", kldiv)
+            kldiv =  prediction + args.eta * kldiv
 
             if kldiv >= max_kl:
                 max_kl = kldiv
@@ -322,12 +333,6 @@ if __name__ == '__main__':
                 new_sample = kernel_transform(new_sample)
             data = np.concatenate((data, new_sample))
             labels = np.concatenate((labels, new_label))
-        # print (new_sample.shape)
-        # print (new_label.shape)
-        # print (data.shape)
-        # print (labels.shape)
-        # print (data.shape)
-        # print (labels.shape)
-        # input("Next?")
+
         train(model, data, labels, epochs=100, retrain=itrs)
         itrs += 1

@@ -307,11 +307,16 @@ if __name__ == '__main__':
         # train
         train(model, data, labels, args.epochs)
 
+    kl_file = open(os.path.join(log_dir, 'kls.txt'), 'w')
     itrs = 1
     while True:
         # alternate, recommendation, retraining
         # kl, movie, target = compute_vpi(model, data[0][0:5], movies)
         kl, movie, target = compute_vpi(model, None, movies)
+
+        kl_file.write(str(kl)+'\n')
+        kl_file.flush()
+
         movie_id = int(movie[0]*N_MOVIES)
         resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
         # concat new movie to dataset
@@ -336,3 +341,5 @@ if __name__ == '__main__':
 
         train(model, data, labels, epochs=100, retrain=itrs)
         itrs += 1
+
+    kl_file.close()

@@ -23,6 +23,7 @@ parser.add_argument('--user', type=int, default=1, help='Which user to train on'
 parser.add_argument('--use-kernel', action='store_true')
 parser.add_argument('--use-non-lin', action='store_true')
 parser.add_argument('--use-fake-user', action='store_true')
+parser.add_argument('--use-default-recs', action='store_true')
 parser.add_argument('--vpi', action='store_true')
 parser.add_argument('--tag', type=str, help='exp tag')
 args = parser.parse_args()
@@ -213,21 +214,27 @@ def train(model, data, labels, epochs, retrain=0):
 
         e += 1
 
+    print ("Epoch: ", e, ", retrain: ", retrain, compute_error(model, data, labels), compute_accuracy(model, data, labels))
+    # save the Model
+    torch.save(model, log_dir+'/model_' + args.model_type + '_epoch_'+str(e)+'_retrain_'+str(retrain)+'.pth')
 
 
-def compute_vpi(model, user_tag, movies):
+def compute_vpi(model, user_tag, movies, rated_ids):
     """
     Compute value of perfect information for each movie...
 
     TODO: don't permit recommending movie that user already rated?
     """
     max_kl = -np.inf
+    max_pred = -np.inf
     max_kl_movie = None
     max_kl_target = None
     for i in range(N_MOVIES):
-        if i % 100 == 0:
-            print ("Checking KL for movie ", i)
+        # if i % 100 == 0:
+            # print ("Checking KL for movie ", i)
         m = movies[i]
+        if int(m[0]*N_MOVIES) in rated_ids:
+            continue
         # print (m.shape)
         # input("")
         sample = m[np.newaxis,:]
@@ -249,20 +256,49 @@ def compute_vpi(model, user_tag, movies):
                     print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
         else:
             # try something diff, use explicit trade off
-            target = np.array([[0]])
             prediction = model(Variable(torch.from_numpy(sample), volatile=True).float()).data[0,0]
-            kldiv = model.fast_kl_div(sample, target)
+            # target = np.array([[1]])
+            expected_kl = prediction * model.fast_kl_div(sample, np.array([[1]])) + (1-prediction) * model.fast_kl_div(sample, np.array([[0]]))
+            # expected_kl = model.fast_kl_div(sample, np.array([[1]])) + model.fast_kl_div(sample, np.array([[0]]))
+            # kldiv = model.fast_kl_div(sample, target)
             # print ("pred: ", prediction, ", kldiv: ", kldiv)
-            kldiv =  prediction + args.eta * kldiv
+            reward = prediction + args.eta * expected_kl
 
-            if kldiv >= max_kl:
+            if reward >= max_pred:
+                max_pred = reward
                 max_kl = kldiv
                 max_kl_movie = m
-                max_kl_target = target
-                print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
+                max_kl_target = -1
+                # print ("Max KL: ", max_kl, list(max_kl_movie))
 
     print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
-    return max_kl, max_kl_movie, max_kl_target
+    return max_pred, max_kl, max_kl_movie, max_kl_target
+
+def compute_default(model, user_tag, movies, rated_ids):
+    """
+    TODO: don't permit recommending movie that user already rated?
+    """
+    max_like = -np.inf
+    max_like_movie = None
+    for i in range(N_MOVIES):
+        if i % 100 == 0:
+            print ("Checking movie ", i)
+        m = movies[i]
+        if int(m[0]*N_MOVIES) in rated_ids:
+            continue
+        sample = m[np.newaxis,:]
+        if args.use_kernel:
+            sample = kernel_transform(sample)
+
+        prediction = model(Variable(torch.from_numpy(sample), volatile=True).float()).data[0,0]
+        if prediction >= max_like:
+            max_like = prediction
+            max_like_movie = m
+            print ("Max Like: ", max_like, list(max_like_movie))
+
+    print ("Max Like: ", max_like, list(max_like_movie))
+    return max_like, max_like_movie
+
 
 def get_movie_name(titles, id):
     return str(titles[id])
@@ -293,8 +329,14 @@ def plot_tsne(data, labels, movies):
         # input("Done")
         plt.close()
 
+import csv
+
 if __name__ == '__main__':
     data, labels, movies, titles = load_data()
+    rated_ids = []
+    for i in range(len(data)):
+        rated_ids.append(int(data[i,0]*N_MOVIES))
+
     # plot_tsne(data, labels, movies)
     print_user_prefs(data, labels, titles)
     # input("")
@@ -308,26 +350,35 @@ if __name__ == '__main__':
         train(model, data, labels, args.epochs)
 
     kl_file = open(os.path.join(log_dir, 'kls.txt'), 'w')
+    writer = csv.writer(kl_file)
     itrs = 1
     while True:
         # alternate, recommendation, retraining
         # kl, movie, target = compute_vpi(model, data[0][0:5], movies)
-        kl, movie, target = compute_vpi(model, None, movies)
-
-        kl_file.write(str(kl)+'\n')
-        kl_file.flush()
+        if args.use_default_recs:
+            pred, movie = compute_default(model, None, movies, rated_ids)
+            kl = -1
+            target = -1
+        else:
+            pred, kl, movie, target = compute_vpi(model, None, movies, rated_ids)
 
         movie_id = int(movie[0]*N_MOVIES)
+        movie_name = get_movie_name(titles, movie_id)
         resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
         # concat new movie to dataset
+        # resp = 'y' #if np.random.random() < 0.5 else 'n'
         if resp == 'Y' or resp == 'y':
             new_label = np.array([[1.]])
         else:
             new_label = np.array([[0.]])
 
+        writer.writerow([str(pred), str(kl), np.array_str(movie, max_line_width=1000000), str(movie_id), str(movie_name)])
+        kl_file.flush()
+
         # TODO: check whether sample is in data first, change label if needed
         # concat user portion with movie portion
         # new_sample = np.concatenate((data[0][0:5], movie))[np.newaxis,:]
+        rated_ids.append(int(movie[0]*N_MOVIES))
         new_sample = movie[np.newaxis,:]
         data_index = np.argwhere(data[:, 0] == movie[0])
         print ("Existing data_index:", data_index)
@@ -342,4 +393,8 @@ if __name__ == '__main__':
         train(model, data, labels, epochs=100, retrain=itrs)
         itrs += 1
 
+        if itrs > 1000:
+            break
+
+    writer.close()
     kl_file.close()

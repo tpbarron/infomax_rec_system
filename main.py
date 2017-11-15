@@ -249,7 +249,7 @@ def compute_vpi(model, user_tag, movies):
                     print ("Max KL: ", max_kl, list(max_kl_movie), float(max_kl_target))
         else:
             # try something diff, use explicit trade off
-            target = np.array([[j]])
+            target = np.array([[0]])
             prediction = model(Variable(torch.from_numpy(sample), volatile=True).float()).data[0,0]
             kldiv = model.fast_kl_div(sample, target)
             # print ("pred: ", prediction, ", kldiv: ", kldiv)

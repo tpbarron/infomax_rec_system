@@ -266,7 +266,8 @@ def compute_vpi(model, user_tag, movies, rated_ids):
 
             if reward >= max_pred:
                 max_pred = reward
-                max_kl = kldiv
+                # max_kl = kldiv
+                max_kl = expected_kl
                 max_kl_movie = m
                 max_kl_target = -1
                 # print ("Max KL: ", max_kl, list(max_kl_movie))
@@ -364,7 +365,12 @@ if __name__ == '__main__':
 
         movie_id = int(movie[0]*N_MOVIES)
         movie_name = get_movie_name(titles, movie_id)
-        resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
+        # resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
+        #
+        #
+        print("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
+        resp = np.random.choice(['Y', 'N'])
+        print("Response is " + resp)
         # concat new movie to dataset
         # resp = 'y' #if np.random.random() < 0.5 else 'n'
         if resp == 'Y' or resp == 'y':
@@ -393,7 +399,7 @@ if __name__ == '__main__':
         train(model, data, labels, epochs=100, retrain=itrs)
         itrs += 1
 
-        if itrs > 1000:
+        if itrs > 10:
             break
 
     writer.close()

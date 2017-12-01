@@ -16,10 +16,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data-path', type=str, default='datafile_ml100k.npz', help='data file')
 parser.add_argument('--model-type', type=str, default='BNN', help='model type, FC or BNN')
 parser.add_argument('--batch-size', type=int, default=128, help='training batch size')
-parser.add_argument('--epochs', type=int, default=10000, help='training epochs')
+parser.add_argument('--epochs', type=int, default=5000, help='training epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--eta', type=float, default=0.1, help='expl param')
-parser.add_argument('--load-model', type=str, default='models/veta/model_BNN_epoch_10000_retrain_0.pth', help='which model to load')
+parser.add_argument('--load-model', type=str, default='', help='which model to load')
 parser.add_argument('--user', type=int, default=1, help='Which user to train on')
 parser.add_argument('--nusers', type=int, default=5, help='num users to use')
 parser.add_argument('--use-kernel', action='store_true')
@@ -28,7 +28,7 @@ parser.add_argument('--use-fake-user', action='store_true')
 parser.add_argument('--use-default-recs', action='store_true')
 parser.add_argument('--use-user-tag', action='store_true', help='Note: not compatible with fake user')
 parser.add_argument('--vpi', action='store_true')
-parser.add_argument('--tag', type=str, help='exp tag')
+parser.add_argument('--tag', type=str, help='exp tag', default='tmp')
 args = parser.parse_args()
 
 log_dir = os.path.join('models/', args.tag)
@@ -152,10 +152,10 @@ def load_data():
     ground_truth_one_hot = np.zeros((len(ground_truth), 1))
     for i in range(len(ground_truth)):
         if ground_truth[i] == 0.01:
-            print ("Negative")
+            # print ("Negative")
             ground_truth_one_hot[i] = 0      # [0] means rating was 1-3
         elif ground_truth[i] == 1:
-            print ("Positive")
+            # print ("Positive")
             ground_truth_one_hot[i] = 1      # [1] means rating was 4-5
 
     # shuffle the data
@@ -413,7 +413,7 @@ if __name__ == '__main__':
         rated_ids.append(int(movie[0]*N_MOVIES))
         new_sample = movie[np.newaxis,:]
         data_index = np.argwhere(data[:, 0] == movie[0])
-        print ("Existing data_index:", data_index)
+        # print ("Existing data_index:", data_index)
         if len(data_index) > 0:
             labels[data_index[0][0]] = new_label
         else:

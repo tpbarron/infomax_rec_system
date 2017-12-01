@@ -1,5 +1,7 @@
-models/
-*.npz
+backup_models/
+items_file.npz
+ratings_file.npz
+users_file.npz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

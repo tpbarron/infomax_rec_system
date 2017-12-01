@@ -31,6 +31,9 @@ python3
 pytorch (needs to be installed separately: http://pytorch.org/)  
 numpy  
 sklearn  
+scipy  
+pandas  
+matplotlib  
 
 Descriptions of each file:  
 main.py: main python script, used to train models, generate recommendations, and plot results.  

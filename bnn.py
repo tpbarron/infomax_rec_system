@@ -36,7 +36,7 @@ class BayesianLayer(nn.Module):
                  num_inputs,
                  num_outputs,
                  nonlinearity=F.relu,
-                 prior_sd=1.0,
+                 prior_sd=0.1, #1.0,
                  **kwargs):
         super(BayesianLayer, self).__init__()
 
@@ -210,7 +210,7 @@ class BNN(nn.Module):
                  nonlinearity=F.relu,
                  lr=0.0001,
                  n_samples=10,
-                 likelihood_sd=0.5,
+                 likelihood_sd=0.1, #0.5,
                  n_batches=5.0,
                  nonlin=True):
         super(BNN, self).__init__()

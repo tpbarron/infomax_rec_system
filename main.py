@@ -4,6 +4,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics.pairwise import polynomial_kernel
 import pickle
 import os
+import csv
 
 import torch
 from torch.autograd import Variable
@@ -20,10 +21,12 @@ parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--eta', type=float, default=0.1, help='expl param')
 parser.add_argument('--load-model', type=str, default='', help='which model to load')
 parser.add_argument('--user', type=int, default=1, help='Which user to train on')
+parser.add_argument('--nusers', type=int, default=5, help='num users to use')
 parser.add_argument('--use-kernel', action='store_true')
 parser.add_argument('--use-non-lin', action='store_true')
 parser.add_argument('--use-fake-user', action='store_true')
 parser.add_argument('--use-default-recs', action='store_true')
+parser.add_argument('--use-user-tag', action='store_true', help='Note: not compatible with fake user')
 parser.add_argument('--vpi', action='store_true')
 parser.add_argument('--tag', type=str, help='exp tag')
 args = parser.parse_args()
@@ -42,6 +45,7 @@ N_MOVIES = 1682
 
 if args.use_fake_user:
     args.user = N_USERS
+    N_USERS += 1
 
 def kernel_transform(data):
     new_data = np.copy(data)
@@ -84,33 +88,45 @@ def load_data():
     exit()
     """
     #   set up the array of examples
-    # example_array = np.zeros([N_USERS * N_MOVIES, 25])
     fake_user_did_like = [49, 88, 95, 120, 134, 171, 175, 180, 182, 221, \
         1, 28, 78, 116, 117, 143, 160, 173, 209, 225]
     fake_user_did_not_like = [370, 377, 388, 401, 415, 420, 426, 457, 482, 483, \
         40, 66, 71, 89, 138, 150, 152, 157, 162, 167]
 
+    if args.use_user_tag:
+        dim = 25
+    else:
+        dim = 20
     # add one for fake user
-    example_array = np.zeros([(N_USERS+1) * N_MOVIES, 20])
-    labels = np.zeros([(N_USERS+1) * N_MOVIES, 1])
+    example_array = np.zeros([(N_USERS) * N_MOVIES, dim])
+    labels = np.zeros([(N_USERS) * N_MOVIES, 1])
     index = 0
-    for i in range(N_USERS+1):
+    for i in range(N_USERS):
         for j in range(N_MOVIES):
             # first 1682 rows of batch correspond to first user;
             #  second 1682 rows of batch correspond to second user, etc.
             # example_array[index, 0:5] = Users[i, :]
             # example_array[index, 5:25] = Items[j, :]
 
-            example_array[index,:] = Items[j, :]
-            if i == N_USERS: # make fake user
-                if j in fake_user_did_like:
-                    # print ("TEST like")
-                    labels[index, 0] = 1.0
-                elif j in fake_user_did_not_like:
-                    # print ("TEST not like")
-                    labels[index, 0] = 0.01
+            if args.use_user_tag:
+                example_array[index,0:20] = Items[j, :]
+                if i == N_USERS-1: # make fake user
+                    if j in fake_user_did_like:
+                        labels[index, 0] = 1.0
+                    elif j in fake_user_did_not_like:
+                        labels[index, 0] = 0.01
+                else:
+                    example_array[index,20:25] = Users[i, :]
+                    labels[index, 0] = Ratings[i, j]
             else:
-                labels[index, 0] = Ratings[i, j]
+                example_array[index,:] = Items[j, :]
+                if i == N_USERS-1: # make fake user
+                    if j in fake_user_did_like:
+                        labels[index, 0] = 1.0
+                    elif j in fake_user_did_not_like:
+                        labels[index, 0] = 0.01
+                else:
+                    labels[index, 0] = Ratings[i, j]
 
             index += 1
 
@@ -122,13 +138,13 @@ def load_data():
     print (example_array.min(), example_array.max())
 
     # normalized movies
-    movies = example_array[0:N_MOVIES,:]# 5:25]
+    movies = example_array[0:N_MOVIES,0:20] # 5:25]
 
     # debug
     print("first row of labels: ", labels[0:N_MOVIES, 0])
     # examples & targets
-    examples = example_array[args.user*N_MOVIES:(args.user+1)*N_MOVIES,:]
-    ground_truth = labels[args.user*N_MOVIES:(args.user+1)*N_MOVIES]
+    examples = example_array[args.user*N_MOVIES:(args.user+args.nusers)*N_MOVIES,:]
+    ground_truth = labels[args.user*N_MOVIES:(args.user+args.nusers)*N_MOVIES]
     nz = np.nonzero(ground_truth)[0]
     examples = examples[nz,:]
     ground_truth = ground_truth[nz]
@@ -153,13 +169,11 @@ def load_data():
         random_examples = kernel_transform(random_examples)
     random_labels = ground_truth_one_hot[p]
     print ("Data / targets: ", random_examples.shape, random_labels.shape)
-    # input("")
     return random_examples, random_labels, movies, MovieTitles
 
 def build_model(input_dim=20, output_dim=1, n_batches=5):
     #  model_type:  BNN for Bayesian network, FC for fully-connected/dense/linear model
     if args.model_type == 'BNN':
-        # 0.005
         model = bnn.BNN(input_dim, output_dim, lr=args.lr, n_batches=n_batches, nonlin=args.use_non_lin)
     elif args.model_type == 'FC':
         model = simple_model.FC(input_dim, output_dim, lr=args.lr, nonlin=args.use_non_lin)
@@ -191,6 +205,9 @@ def compute_accuracy(model, data, labels):
     return correct / len(labels)
 
 def train(model, data, labels, epochs, retrain=0):
+    train_file = open(os.path.join(log_dir, 'train.csv'), 'w')
+    train_writer = csv.writer(train_file)
+
     num_batches = int(np.ceil(len(labels) / args.batch_size))
 
     e = 0
@@ -206,7 +223,12 @@ def train(model, data, labels, epochs, retrain=0):
             inputs = data[ind_start:ind_end,:]
             targets = labels[ind_start:ind_end,:]
             loss = model.train(inputs, targets)
+
             b += 1
+
+        train_writer.writerow([str(e), str(b), str(compute_error(model, data, labels)), str(compute_accuracy(model, data, labels))])
+        train_file.flush()
+
         if e % 100 == 0:
             print ("Epoch: ", e, ", retrain: ", retrain, compute_error(model, data, labels), compute_accuracy(model, data, labels))
             # save the Model
@@ -266,7 +288,7 @@ def compute_vpi(model, user_tag, movies, rated_ids):
 
             if reward >= max_pred:
                 max_pred = reward
-                max_kl = kldiv
+                max_kl = expected_kl
                 max_kl_movie = m
                 max_kl_target = -1
                 # print ("Max KL: ", max_kl, list(max_kl_movie))
@@ -329,7 +351,6 @@ def plot_tsne(data, labels, movies):
         # input("Done")
         plt.close()
 
-import csv
 
 if __name__ == '__main__':
     data, labels, movies, titles = load_data()

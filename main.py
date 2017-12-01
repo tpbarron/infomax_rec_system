@@ -19,7 +19,7 @@ parser.add_argument('--batch-size', type=int, default=128, help='training batch 
 parser.add_argument('--epochs', type=int, default=10000, help='training epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--eta', type=float, default=0.1, help='expl param')
-parser.add_argument('--load-model', type=str, default='', help='which model to load')
+parser.add_argument('--load-model', type=str, default='models/veta/model_BNN_epoch_10000_retrain_0.pth', help='which model to load')
 parser.add_argument('--user', type=int, default=1, help='Which user to train on')
 parser.add_argument('--nusers', type=int, default=5, help='num users to use')
 parser.add_argument('--use-kernel', action='store_true')
@@ -358,6 +358,7 @@ if __name__ == '__main__':
     for i in range(len(data)):
         rated_ids.append(int(data[i,0]*N_MOVIES))
 
+    print("Plotting fake user movies at start")
     # plot_tsne(data, labels, movies)
     print_user_prefs(data, labels, titles)
     # input("")
@@ -370,9 +371,10 @@ if __name__ == '__main__':
         # train
         train(model, data, labels, args.epochs)
 
-    kl_file = open(os.path.join(log_dir, 'kls.txt'), 'w')
+    kl_file = open(os.path.join(log_dir, 'kls_' + str(args.eta) + '.txt'), 'w')
     writer = csv.writer(kl_file)
     itrs = 1
+    list_of_recommended_movies = []
     while True:
         # alternate, recommendation, retraining
         # kl, movie, target = compute_vpi(model, data[0][0:5], movies)
@@ -385,9 +387,18 @@ if __name__ == '__main__':
 
         movie_id = int(movie[0]*N_MOVIES)
         movie_name = get_movie_name(titles, movie_id)
-        resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
+        # resp = input("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
+        #
+        #
+        print("Do you like the movie " + get_movie_name(titles, movie_id) + "? Y/N. ")
+        # resp = np.random.choice(['Y', 'N'])
+        # print("Response is " + resp)
         # concat new movie to dataset
-        # resp = 'y' #if np.random.random() < 0.5 else 'n'
+        # respond with 'y' at rate roughly equal to prediction
+        # interpret pred as probability
+        resp = 'Y' if np.random.random() < pred else 'N'
+        print("Response is " + resp)
+        #
         if resp == 'Y' or resp == 'y':
             new_label = np.array([[1.]])
         else:
@@ -410,12 +421,19 @@ if __name__ == '__main__':
                 new_sample = kernel_transform(new_sample)
             data = np.concatenate((data, new_sample))
             labels = np.concatenate((labels, new_label))
+            list_of_recommended_movies.append(movie)
 
         train(model, data, labels, epochs=100, retrain=itrs)
         itrs += 1
 
-        if itrs > 1000:
+        if itrs > 10:
+            #  figure out how to label points in tsne plot
+            # plot_tsne(data, labels, list_of_recommended_movies)
+            list_of_recommended_movies = np.array(list_of_recommended_movies)
+            print("shape of listorm is: ", np.shape(list_of_recommended_movies))
+            filename_rcmd = 'saved_rcmd_movies' + str(args.eta) + '.npz'
+            np.savez(filename_rcmd, listorm=list_of_recommended_movies)
             break
 
-    writer.close()
+    # writer.close()
     kl_file.close()
